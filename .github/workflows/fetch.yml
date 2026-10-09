@@ -29,7 +29,12 @@ jobs:
       - name: Upload release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh release create vmassets out/rootfs.vhdx.zst out/vmlinuz.zst out/initrd.zst out/claude.zst \
-            --title "vm assets" --notes "claude desktop vm assets mirror"
+          FILES="out/rootfs.vhdx.zst out/vmlinuz.zst out/initrd.zst out/claude.zst"
+          if gh release view vmassets >/dev/null 2>&1; then
+            gh release upload vmassets $FILES --clobber
+          else
+            gh release create vmassets $FILES --title "vm assets" --notes "claude desktop vm assets mirror"
+          fi
