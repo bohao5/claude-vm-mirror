@@ -1,0 +1,38 @@
+name: chunk-manifest
+on:
+  workflow_dispatch:
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - name: Build manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          B="https://downloads.claude.ai/vms/linux/x64/882518393ed4ce89020bd48d99d5daf114999773"
+          curl -fSL --retry 8 --retry-all-errors -C - -o out/rootfs.vhdx.zst "$B/rootfs.vhdx.zst"
+          curl -fSL --retry 8 --retry-all-errors -C - -o out/vmlinuz.zst "$B/vmlinuz.zst"
+          curl -fSL --retry 8 --retry-all-errors -C - -o out/initrd.zst "$B/initrd.zst"
+          curl -fSL --retry 8 --retry-all-errors -C - -o out/claude.zst "https://downloads.claude.ai/claude-code-releases/rc/3abc54a9d60b4d12c627afad22d6e5f58a6199d2/2.1.293/linux-x64/claude.zst"
+          : > manifest.txt
+          for f in out/rootfs.vhdx.zst out/vmlinuz.zst out/initrd.zst out/claude.zst; do
+            split -b 8388608 -d -a 4 --additional-suffix=.part "$f" "parts_${f##*/}_"
+            for p in parts_${f##*/}_*; do
+              echo "$f ${p##*_} $(sha256sum "$p" | cut -d' ' -f1) $(stat -c%s "$p")" >> manifest.txt
+            done
+            rm -f parts_${f##*/}_*
+          done
+          wc -l manifest.txt
+      - name: Upload manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release upload vmassets manifest.txt --clobber
