@@ -1,0 +1,35 @@
+name: fetch-vm-assets
+on:
+  workflow_dispatch:
+  push:
+    paths: [trigger.txt]
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - name: Download and verify
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          B="https://downloads.claude.ai/vms/linux/x64/882518393ed4ce89020bd48d99d5daf114999773"
+          curl -fSL --retry 8 --retry-delay 3 --retry-all-errors -C - -o out/rootfs.vhdx.zst "$B/rootfs.vhdx.zst"
+          curl -fSL --retry 8 --retry-delay 3 --retry-all-errors -C - -o out/vmlinuz.zst "$B/vmlinuz.zst"
+          curl -fSL --retry 8 --retry-delay 3 --retry-all-errors -C - -o out/initrd.zst "$B/initrd.zst"
+          curl -fSL --retry 8 --retry-delay 3 --retry-all-errors -C - -o out/claude.zst "https://downloads.claude.ai/claude-code-releases/rc/3abc54a9d60b4d12c627afad22d6e5f58a6199d2/2.1.293/linux-x64/claude.zst"
+          printf '%s  %s\n' \
+            5696e58a854c2fb3e14c4d78038c398671cc89cf1fcf60316c5c421825bbf5c6 out/rootfs.vhdx.zst \
+            3118616ef6ba3866652284b8b4c224a96876c56091724c35c93caf1ccb9b50a9 out/vmlinuz.zst \
+            c12df253f5ddac9f7f7cdf317c7257586d262eabd9336c1ce001301399fbe56a out/initrd.zst \
+            25786da347c30641dc6c50733d090d77cb540f105a61af7e9895b56e39fe16a5 out/claude.zst \
+            | sha256sum -c -
+          ls -lh out
+      - name: Upload release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create vmassets out/rootfs.vhdx.zst out/vmlinuz.zst out/initrd.zst out/claude.zst \
+            --title "vm assets" --notes "claude desktop vm assets mirror"
